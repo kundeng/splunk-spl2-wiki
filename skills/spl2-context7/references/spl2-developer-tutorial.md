@@ -1,807 +1,644 @@
 # SPL2 for Developers
 
-This tutorial is a developer-oriented guide to Splunk SPL2 for the `spl2-context7` library. Its goal is not to restate the product docs page-by-page. It is to turn Splunk's primary documentation into a coherent mental model for engineers who need to write, migrate, review, and reuse SPL2 in real projects.
+This guide is the architectural and language-level reference for the `spl2-context7` skill. It is written for engineers who need to author SPL2 deliberately, review it rigorously, and structure reusable SPL2 assets instead of treating queries as one-off search bar fragments.
 
-The repository includes local corpus tooling for maintaining the source material behind this tutorial, but the tutorial itself is meant to be a durable end-user reference rather than a fetcher manual.
+The tutorial is self-contained on purpose. It explains the SPL2 model, the grammar choices that matter in practice, the expression system, reuse mechanisms, compatibility constraints, and the migration traps that routinely break otherwise competent SPL authors.
 
-## Scope
+## 1. Start With The Real Execution Context
 
-This guide focuses on SPL2 as documented for:
+The first SPL2 design question is not syntax. It is runtime.
 
-- Splunk Cloud Platform Search
-- Splunk Enterprise Search
-- SPL2-based app development on the `splunkd` profile
-- Cross-product concepts that also affect Edge Processor and Ingest Processor
+SPL2 appears in different products and authoring surfaces:
 
-Primary source sets:
+- Search bar for ad hoc searches
+- SPL2 module editor for named, reusable statements
+- App development on the `splunkd` profile
+- Edge Processor and Ingest Processor with narrower compatibility profiles
 
-- SPL2 Overview:
-  https://help.splunk.com/en/splunk-cloud-platform/search/spl2-overview/what-is-spl2
-- SPL2 Search Manual:
-  https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-manual/getting-started/searching-data-using-spl2
-- SPL2 Search Reference:
-  https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-reference/introduction/introduction
+Those contexts are not interchangeable.
 
-## 1. What SPL2 Is
+### 1.1 Search bar
 
-SPL2 is Splunk's newer Search Processing Language. It is intended to unify search and data preparation across multiple Splunk products, while supporting both SPL-like and SQL-like styles. That matters for developers because SPL2 is not just "SPL with a few syntax changes". It introduces:
+Use the search bar when you are writing a single disposable statement. The search bar is the least structured environment and preserves some convenience behavior:
 
-- A bimodal query style: SPL-style pipelines and SQL-style `FROM` / `SELECT`
-- Reusable modules, views, and namespaces
-- Compatibility profiles across products
-- Structured expression features such as arrays, objects, lambdas, templates, and richer function behavior
-- A path for embedding unsupported SPL fragments with `spl1`
-
-Relevant sources:
-
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-overview/what-is-spl2
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-overview/what-is-new-and-different-in-spl2-
-
-## 2. Where You Can Use SPL2
-
-SPL2 is exposed through several interfaces:
-
-- Search & Reporting app
-- Pipeline editor
-- Splunk Extension for VS Code
-- REST API interfaces
-
-In the Search & Reporting app, there are two distinct authoring modes:
-
-- The Search bar for standalone, ad hoc SPL2 statements
-- The SPL2 module editor for reusable, multi-statement work
-
-Use the Search bar when the search is disposable. Use the module editor when the search should be named, branched, reused, exported, shared, or combined with custom functions or types.
-
-Important environment note from the docs:
-
-- On Splunk Enterprise, SPL2 support in Search & Reporting is documented only for Unix and Linux systems.
-
-Relevant sources:
-
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-overview/where-can-i-use-spl2
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-manual/standalone-searches-in-the-search-bar/run-an-spl2-search-in-the-search-bar
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-manual/getting-started/search-page-overview-for-spl2
-
-## 3. SPL2 Mental Model
-
-If you already know SPL, the biggest upgrade is not syntax. It is the resource model.
-
-### 3.1 Datasets
-
-A dataset is any collection of data you can query or feed into later search stages. Common examples include:
-
-- Indexes
-- Metric indexes
-- Lookups
-- Jobs
-- Views
-- Search results from a prior named statement
-
-This is why `from` is so central in SPL2. It treats data sources more uniformly.
-
-### 3.2 Modules
-
-A module is a file that contains one or more related SPL2 statements. A module can hold:
-
-- Search statements
-- Custom functions
-- Custom data types
-- Import and export statements
-
-This is the right abstraction for code review, collaboration, and reuse. A serious SPL2 codebase should think in modules, not only pasted searches.
-
-### 3.3 Statements
-
-Statements are the top-level units inside a module. Search statements are only one kind of statement.
-
-### 3.4 Search Names
-
-Inside a module, searches have names such as `$base_search`. Those names act like variables referring to result datasets. That enables search branching and chained workflows.
-
-Naming rules documented by Splunk include:
-
-- Search names start with `$`
-- The first character after `$` must be lowercase
-- Remaining characters can be lowercase letters, digits, or `_`
-- Names must be unique within the module
-
-### 3.5 Branching
-
-Branching is one of the most useful SPL2 developer features. You can:
-
-- Create cascading child searches
-- Create parallel branches from the same base search
-- Reuse the output of one named search as the dataset for another
-
-That is a material improvement over repeatedly retyping or copy-pasting large SPL pipelines.
-
-### 3.6 Views
-
-An SPL2 view is a named SPL2 search exported from a module. A view gives you a reusable abstraction layer over raw datasets, which is useful for:
-
-- Shared business logic
-- Reusable filtering
-- Data masking
-- Team-facing curated datasets
-
-### 3.7 Namespaces
-
-Namespaces are the packaging and identity system for SPL2 resources. They are closer to logical containers than filesystem directories. They matter when you want to:
-
-- Import shared resources
-- Avoid naming conflicts
-- Package SPL2 resources with apps
-- Reuse custom functions, types, modules, and views across teams
-
-Relevant sources:
-
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-manual/modules-statements-and-views/spl2-modules-and-statements
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-manual/modules-statements-and-views/branching-spl2-searches
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-manual/modules-statements-and-views/spl2-views
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-manual/export-import-and-namespaces/understanding-spl2-namespaces
-
-## 4. SPL2 Has Two Query Styles
-
-Splunk explicitly documents SPL2 as supporting both SPL and SQL syntax patterns.
-
-### 4.1 SPL-style searches
-
-Use SPL-style syntax when you want:
-
-- Familiar search pipelines
-- Search literals and keyword-heavy filtering
-- Straightforward migration from existing SPL
-
-Example:
+- `index=main status=200` can imply `search`
+- raw-term-first searches still require `search`
+- there is no module packaging, import/export, or branching structure
 
 ```spl
-search index=main status=200 host=www2
-| fields _time, productId, categoryId
-| stats count() by categoryId
+index=main status=200
 ```
-
-### 4.2 SQL-style searches
-
-Use SQL-style syntax when you want:
-
-- A `FROM`/`WHERE`/`GROUP BY`/`SELECT` mental model
-- Cleaner clause-oriented reads
-- Easier onboarding for SQL-heavy developers
-
-Example:
-
-```spl
-FROM main
-WHERE status=200 AND host="www2"
-GROUP BY categoryId
-SELECT _time, categoryId, count() AS event_count
-```
-
-### 4.3 Mixed style is allowed
-
-Splunk documents that you can start with SQL-like syntax and continue with SPL2 commands in a pipeline. In practice, many effective SPL2 queries are hybrid:
-
-```spl
-FROM main
-WHERE sourcetype="access_*"
-SELECT _time, host, status, bytes
-| eval kb=bytes/1024
-| stats avg(kb) AS avg_kb by host, status
-```
-
-### 4.4 Choosing between `search` and `from`
-
-The Search Manual recommends thinking first about the generating command:
-
-- `search` when you want SPL-style search semantics
-- `from` when you want SQL-like clauses and more explicit dataset handling
-
-Relevant sources:
-
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-reference/introduction/understanding-spl2-syntax
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-manual/getting-started/quick-start-write-and-run-a-basic-spl2-search/start-searching-data-using-spl2
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-reference/from-command/from-command-overview
-
-## 5. Search Bar Versus Module Editor
-
-This distinction is easy to miss and causes real confusion.
-
-### 5.1 Search bar behavior
-
-The Search bar is for one standalone statement. It supports SPL2, but it also preserves some convenience behavior:
-
-- If the first expression is `index=<index_name>`, `search` can be implied
-- If the first expression is not an index expression, you must write `search` explicitly
-
-Example:
-
-```spl
-index=main status=404
-```
-
-But this must be written explicitly:
 
 ```spl
 search 404 index=main
 ```
 
-### 5.2 Module editor behavior
+### 1.2 Module editor
 
-In modules:
+Use a module when the query needs a name, branching, export, imports, custom functions, custom data types, or code review.
 
-- You explicitly write the generating command
-- You must name each search
-- Reuse, branching, views, and imports become available
+Module rules matter:
 
-Example:
-
-```spl
-$errors = search index=main status=404
-```
-
-That difference matters for migration. A query that works in the Search bar as implicit `search` might need an explicit command and a name in a module.
-
-Relevant sources:
-
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-manual/standalone-searches-in-the-search-bar/run-an-spl2-search-in-the-search-bar
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-manual/getting-started/quick-start-write-and-run-a-basic-spl2-search/start-searching-data-using-spl2
-
-## 6. Syntax Rules That Trip Up SPL Users
-
-This is the section most migration work needs.
-
-### 6.1 Lists are comma-separated
-
-In SPL2, lists are consistently comma-separated.
-
-Instead of:
+- search statements are named
+- generating commands are explicit
+- branching is first-class
+- views and reusable resources become possible
 
 ```spl
-... | dedup 2 source host
+$base = search index=main status=200
+$errors = from $base where status >= 400
 ```
 
-Use:
+### 1.3 Compatibility profile
+
+Before you optimize for elegance, verify what actually runs:
+
+- `splunkd`
+- `edgeProcessor`
+- `ingestProcessor`
+
+The same SPL2 surface is not available everywhere. A review that ignores profile compatibility is incomplete even if the syntax is otherwise valid.
+
+Canonical docs:
+- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-overview/where-can-i-use-spl2
+- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-reference/spl2-compatibility-profiles-and-quick-references
+
+## 2. SPL2 Is A Language Family, Not Just “New SPL”
+
+SPL2 is easiest to reason about when you separate four layers:
+
+1. Dataset layer: where the data comes from
+2. Search layer: how records are filtered, transformed, and aggregated
+3. Expression layer: how values are computed
+4. Reuse layer: how searches, functions, views, and types are packaged
+
+Traditional SPL users often focus only on the search layer. That is why many migrations feel awkward. SPL2 adds a real expression language and a real reuse model.
+
+### 2.1 Dataset model
+
+In SPL2, a dataset can be:
+
+- an index
+- a lookup
+- a view
+- a named search result
+- a dataset literal
+- a dataset function such as `repeat()`
+
+That model is why `from` is central. It treats the data source explicitly.
+
+### 2.2 Bimodal query style
+
+SPL2 supports both pipeline-heavy SPL-style authoring and clause-oriented SQL-style authoring.
+
+SPL-style:
 
 ```spl
-... | dedup 2 source, host
+search index=main status=200
+| eval kb=bytes/1024
+| stats avg(kb) AS avg_kb by host
 ```
 
-### 6.2 Command options come before command arguments
-
-SPL2 standardizes option placement. For example:
+SQL-style:
 
 ```spl
-... | bin bins=10 size as bin_size
+FROM main
+WHERE status=200
+GROUP BY host
+SELECT host, avg(bytes/1024) AS avg_kb
 ```
 
-### 6.3 Field names may require single quotes
+Hybrid style is normal:
 
-If a field name:
+```spl
+FROM main
+WHERE sourcetype="access_*"
+SELECT _time, host, status, bytes
+| eval kb=round(bytes/1024, 2)
+| stats avg(kb) AS avg_kb by host, status
+```
 
-- starts with something other than a letter or `_`
-- or contains spaces, dashes, wildcards, or other special characters
+The right question is not “which style is more correct?” It is “which style makes the intent obvious for this team and this runtime?”
 
-then single-quote it.
+Canonical docs:
+- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-reference/introduction/understanding-spl2-syntax
+- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-reference/from-command/from-command-overview
 
-Examples:
+## 3. Grammar Rules That Matter In Real Reviews
+
+Most SPL2 bugs are not exotic. They come from repeatedly missing a small set of grammar rules.
+
+### 3.1 Strings use double quotes
+
+```spl
+FROM main
+WHERE host="www2" AND sourcetype="access_*"
+SELECT _time, host
+```
+
+### 3.2 Field names with special characters use single quotes
+
+Use single quotes around field names that contain spaces, dots, dashes, wildcards, or leading non-letters.
 
 ```spl
 ... | eval 'low-category' = lower(categoryId)
-... | stats sum(bytes) AS 'Sum of bytes'
+... | stats max(size) AS 'max.size' by host
 FROM main WHERE '5minutes'="late"
-SELECT 'host*' FROM main
 ```
 
-### 6.4 String values use double quotes
+### 3.3 Search literals use backticks
 
-String literals in SPL2 are generally written with double quotes:
-
-```spl
-FROM main WHERE sourcetype="access_*"
-```
-
-The documented exception is the `search` command, which preserves backward-compatible field-value behavior.
-
-### 6.5 Search literals use backticks
-
-Use backticks when you want one or more raw search terms embedded as a search literal:
+Search literals are not just decoration. They let you embed term-style searching or unsupported SPL fragments where expressions are allowed.
 
 ```spl
 FROM main
-WHERE `user "ladron" from 192.0.2.0/24`
-```
-
-### 6.6 Concatenation uses `+`
-
-SPL used `.` for concatenation. SPL2 uses `+`.
-
-```spl
-... | eval full_name = first_name + " " + last_name
-```
-
-### 6.7 Boolean handling in `eval` is stricter
-
-The docs explicitly note that `eval` cannot directly assign a Boolean value. If a function returns Boolean, wrap it in a function such as `if(...)` when you need an assignable result.
-
-Example:
-
-```spl
-... | eval is_error = if(status in("500", "503"), "true", "false")
-```
-
-### 6.8 Stats expressions are simplified
-
-SPL often used `count(eval(...))`. SPL2 documents direct eval-expression support in stats functions.
-
-Example migration:
-
-```spl
-... | stats count(status="404") AS count_404 by host
-```
-
-Relevant sources:
-
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-overview/specific-differences-between-spl-and-spl2
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-manual/wildcards-quotes-and-escape-characters/quotation-marks
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-manual/wildcards-quotes-and-escape-characters/when-to-escape-characters
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-reference/eval-command/eval-command-usage
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-reference/statistical-and-charting-functions/overview-of-spl2-stats-and-chart-functions
-
-## 7. Expressions: The Real Power Center
-
-Developers should treat expressions as the core language, not as a side feature.
-
-Splunk documents expression support for:
-
-- Literals
-- Fields
-- Assignments
-- Function calls
-- Predicates
-- Unary and binary operations
-- Arrays
-- Objects
-- Search literals
-- Parameters
-- Lambdas
-- Templates
-
-Relevant sources:
-
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-manual/expressions-and-predicates/types-of-expressions
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-manual/expressions-and-predicates/predicate-expressions
-
-### 7.1 Predicate expressions
-
-Predicates are used in:
-
-- `where`
-- `WHERE`
-- `HAVING`
-
-Operators and predicate forms documented by Splunk include:
-
-- Relational operators such as `=`, `!=`, `>`, `<`
-- Logical operators such as `AND`, `OR`, `NOT`, `XOR`
-- Pattern and conditional forms such as `IN`, `LIKE`, `BETWEEN`, `IS NULL`, `EXISTS`
-
-Example:
-
-```spl
-FROM main
-WHERE status IN ("400", "401", "403", "404")
-SELECT _time, host, status
-```
-
-### 7.2 Arrays and objects
-
-SPL2 supports structured literals directly.
-
-Example array:
-
-```spl
-... | eval severities=["low", "medium", "high"]
-```
-
-Example object:
-
-```spl
-... | eval meta={env: "prod", owner: "payments", critical: true}
-```
-
-This makes SPL2 much more useful for JSON-heavy work than classic SPL.
-
-### 7.3 String templates
-
-String templates embed expressions inside strings:
-
-```spl
-... | eval message="status=${status} host=${host}"
-```
-
-They are cleaner than manual concatenation for formatted values.
-
-### 7.4 Field templates
-
-Field templates let you compute field names dynamically:
-
-```spl
-SELECT * FROM [{city: "Seattle", Seattle: 123}]
-| eval '${city}' = 456
-```
-
-This is powerful, but it also raises readability and schema-discipline concerns. Use it intentionally.
-
-### 7.5 Lambdas
-
-SPL2 includes lambda expressions, which is unusual if your mental model is "just a search language". That is one of the clearest signals that SPL2 is a richer programming surface than SPL.
-
-Relevant sources:
-
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-manual/expressions-and-predicates/array-and-object-literals-in-expressions
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-manual/expressions-and-predicates/string-templates-in-expressions
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-manual/expressions-and-predicates/field-templates-in-expressions
-
-## 8. Quoting, Wildcards, and Escaping
-
-The quickest way to write invalid SPL2 is to carry over SPL quoting habits without adjustment.
-
-### 8.1 Single quotes
-
-Use single quotes for field names that need quoting:
-
-```spl
-'status-code'
-'host*'
-'Sum of bytes'
-```
-
-### 8.2 Double quotes
-
-Use double quotes for string literals:
-
-```spl
-host="www2"
-sourcetype="access_*"
-```
-
-### 8.3 Backticks
-
-Use backticks for search literals:
-
-```spl
 WHERE `invalid user sshd[5258]`
+SELECT _time, source, host
 ```
 
-### 8.4 Wildcard behavior depends on context
+```spl
+$top_referrers = from main where host="www3" | `top limit=20 referer`
+```
 
-Splunk documents different wildcard behavior by command family:
+### 3.4 Lists are comma-separated
 
-- `LIKE` with `%` and `_` in `where`, `WHERE`, and `eval`
-- `*` in many other commands
-
-Examples:
+SPL2 is stricter and more regular about lists than SPL.
 
 ```spl
-WHERE like(source, "license%")
+search index=main
+| fields _time, host, status
+| stats count() by host, status
+```
+
+### 3.5 Command options come before command arguments
+
+This is a habitual SPL migration failure.
+
+```spl
+... | bin span=5m _time
+```
+
+### 3.6 Wildcards depend on context
+
+- `like()` with `%` and `_` in `where` and expression contexts
+- `*` in many command arguments
+
+```spl
+... | where like(uri_path, "/api/%")
 search sourcetype="access_*"
 ```
 
-### 8.5 Escaping
+### 3.7 `search` has different syntax rules from expression contexts
 
-Use backslash escaping when needed, but prefer cleaner alternatives where possible:
+This distinction is easy to miss:
 
-- Search literals
-- Raw string literals
+- `where`, `eval`, `SELECT`, and `HAVING` use expression rules
+- `search` uses search syntax
 
-Relevant sources:
+That is why code that works in `search` often cannot simply be pasted into `where` unchanged.
 
+Canonical docs:
 - https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-manual/wildcards-quotes-and-escape-characters/quotation-marks
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-manual/wildcards-quotes-and-escape-characters/when-to-escape-characters
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-manual/wildcards-quotes-and-escape-characters/wildcards
+- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-manual/expressions-and-predicates/types-of-expressions
 
-## 9. The Core Command Set You Will Actually Use
+## 4. Expressions Are The Real Core Of SPL2
 
-You do not need all 189 reference pages before becoming productive. You need a strong foundation in a smaller set:
+If you only remember one thing about SPL2, remember this: the language is expression-driven.
 
-- `search`
-- `from`
-- `where`
+Expressions produce values. They are used in:
+
 - `eval`
-- `fields`
-- `stats`
-- `sort`
-- `dedup`
-- `lookup`
-- `spath`
-- `timechart`
-- `streamstats`
-- `join` and `union` when necessary
+- `where`
+- `SELECT`
+- `GROUP BY span(...)`
+- function arguments
+- templates
+- object and array construction
 
-The SPL2 command quick reference and compatibility tables are the fastest way to see:
+### 4.1 Literal types you should actively use
 
-- what exists
-- what each command does
-- whether a product profile supports it
+SPL2 supports more than simple string and numeric literals:
 
-Relevant sources:
+- strings: `"hello"`
+- raw strings: `@"C:\windows\temp"`
+- numbers: `42`, `3.14`
+- booleans: `true`, `false`
+- null
+- arrays: `["a", "b", 3]`
+- objects: `{host:"www1", status:200}`
 
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-reference/quick-reference-for-spl2-commands
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-reference/spl2-compatibility-profiles-and-quick-references/compatibility-quick-reference-for-spl2-commands
+Example:
 
-### 9.1 `from`
+```spl
+FROM repeat({}, 1)
+SELECT
+  "hello" AS s,
+  @"C:\windows\temp" AS raw_path,
+  [1,2,3] AS nums,
+  {host:"www1", status:200} AS obj
+```
 
-Use `from` when you want clause-driven search construction:
+### 4.2 Predicate expressions
+
+Predicates are boolean expressions used for filtering.
+
+```spl
+... | where status in("400", "401", "403", "404")
+... | where bytes > 1024 AND like(uri_path, "/api/%")
+FROM main WHERE host="www2" OR host="www3" SELECT *
+```
+
+Predicate operators you should expect in reviews:
+
+- relational: `=`, `!=`, `<`, `>`, `<=`, `>=`
+- logical: `AND`, `OR`, `NOT`, `XOR`
+- conditional/pattern functions: `in`, `like`, `match`, `searchmatch`, `cidrmatch`
+
+### 4.3 Arrays and objects
+
+Arrays and objects are not edge features. They are central to JSON-heavy data handling and reusable computed structures.
+
+```spl
+... | eval dims=["region", "host", "service"]
+... | eval record={host:host, status:status, kb:round(bytes/1024, 2)}
+```
+
+### 4.4 Access expressions
+
+Use `[]` for array access and `.` or `[]` for object access.
+
+```spl
+... | eval third_game=games[2]
+... | eval owner=record.host
+... | eval severity=alert["level"]
+```
+
+### 4.5 String templates
+
+Use string templates when concatenation would make the intent harder to read.
+
+```spl
+... | eval status_info="${host} returned ${status} for ${action}"
+```
+
+### 4.6 Field templates
+
+Field templates generate field names dynamically. They are powerful and easy to misuse. Keep them constrained and obvious.
+
+```spl
+SELECT * FROM [{city:"Seattle", Seattle:123}]
+| eval '${city}' = 456
+```
+
+### 4.7 Lambda expressions
+
+Lambdas show up primarily in JSON functions such as `map`, `filter`, `all`, `any`, and `reduce`.
+
+```spl
+... | eval numbers=json_array(1,2,3,4)
+... | eval doubled=map(numbers, x -> x * 2)
+... | eval evens=filter(numbers, x -> x % 2 = 0)
+```
+
+If you use block-style lambdas, keep them short:
+
+```spl
+... | eval total=reduce(numbers, (acc, x) -> { return acc + x })
+```
+
+Canonical docs:
+- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-manual/expressions-and-predicates/types-of-expressions
+- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-manual/expressions-and-predicates/lambda-expressions
+
+## 5. Choose `search` And `from` Deliberately
+
+Many weak SPL2 codebases bounce randomly between `search` and `from`. Treat them as different tools.
+
+### 5.1 Prefer `search` when
+
+- you are migrating classic SPL
+- you want raw search semantics
+- the team already reasons in pipelines
+- the search is mostly command chaining
+
+```spl
+search index=main status=200 host=www2
+| fields _time, host, status, bytes
+| where bytes > 4096
+| stats sum(bytes) AS total_bytes by host
+```
+
+### 5.2 Prefer `from` when
+
+- the dataset should be explicit
+- the query reads better as clauses
+- you want `WHERE`, `GROUP BY`, `ORDER BY`, `LIMIT`, `HAVING`, `SELECT`
+- the team has SQL instincts
 
 ```spl
 FROM main
-WHERE earliest=-15m@m AND sourcetype="access_*"
+WHERE status=200 AND host="www2"
 GROUP BY host
 SELECT host, sum(bytes) AS total_bytes
 ORDER BY total_bytes DESC
 LIMIT 20
 ```
 
-The docs emphasize that `FROM` and `SELECT` are flexible entry points, but clause ordering still matters.
+### 5.3 `from` clause order matters
 
-### 9.2 `search`
+The common mental model is:
 
-Use `search` when you want SPL-style filtering or keyword-centric semantics:
-
-```spl
-search index=main status=500 host=www1
-| fields _time, host, uri_path, status
-```
-
-### 9.3 `where`
-
-Use `where` for Boolean filtering over prior results:
+1. dataset
+2. filtering
+3. grouping
+4. projection
+5. ordering
+6. limiting
 
 ```spl
-... | where status IN ("500", "503") AND like(uri_path, "/api/%")
+FROM main
+WHERE earliest=-15m@m AND sourcetype="access_*"
+GROUP BY host
+SELECT host, avg(bytes) AS avg_bytes
+ORDER BY avg_bytes DESC
+LIMIT 10
 ```
 
-### 9.4 `eval`
-
-Use `eval` to compute fields and normalize values:
+### 5.4 Hybrid queries are often the most maintainable
 
 ```spl
-... | eval kb=bytes/1024, tier=if(bytes > 1048576, "large", "small")
+FROM main
+WHERE sourcetype="access_*"
+SELECT _time, host, status, bytes
+| eval kb=round(bytes/1024, 2)
+| eventstats avg(kb) AS global_avg
+| where kb > global_avg
 ```
 
-### 9.5 `stats`
-
-Use `stats` for aggregation:
-
-```spl
-... | stats count() AS requests, avg(bytes) AS avg_bytes by host, status
-```
-
-### 9.6 `spath`, arrays, and JSON
-
-Use structured expressions together with JSON-aware functions and commands when working with nested payloads. This is one of SPL2's better developer stories.
-
-Relevant sources:
-
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-reference/from-command/from-command-overview
+Canonical docs:
+- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-reference/from-command/from-command-syntax
 - https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-reference/search-command/search-command-overview-and-syntax
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-reference/search-command/search-command-usage
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-reference/where-command/where-command-overview-syntax-and-usage
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-reference/eval-command/eval-command-overview-and-syntax
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-reference/eval-command/eval-command-usage
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-reference/stats-command/stats-command-overview-syntax-and-usage
 
-## 10. Eval Functions and Stats Functions
+## 6. Understand Command Families, Not Just Single Commands
 
-SPL2's function library is broad enough that it is worth studying by category.
+SPL2 reviews get stronger when you recognize command roles.
 
-### 10.1 Eval function categories
+### 6.1 Generating commands
 
-Splunk documents categories including:
+These create the starting dataset.
 
-- Comparison and conditional
-- Conversion
-- Cryptographic
-- Date and time
-- Informational
-- JSON
-- Mathematical
-- Multivalue
-- Statistical eval
-- Text
-- Trigonometric and hyperbolic
+- `search`
+- `from`
+- `join`
+- `union`
+- dataset functions such as `repeat()`
 
-### 10.2 Stats and charting categories
+### 6.2 Filtering commands
 
-Documented categories include:
+- `where`
+- `WHERE` clause
+- search literals
 
-- Aggregate functions
-- Event order functions
-- Multivalue and array functions
-- Time functions
-
-The important developer takeaway is that SPL2 is not only command-driven. A large part of expressiveness comes from combining:
+### 6.3 Evaluation and shaping
 
 - `eval`
-- `where`
-- `from ... SELECT`
-- stats-family functions
-- JSON-aware functions
+- `fields`
+- `rename`
+- `replace`
+- `spath`
+- `rex`
 
-Relevant sources:
+### 6.4 Aggregation and charting
 
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-reference/evaluation-functions/overview-of-spl2-eval-functions
+- `stats`
+- `eventstats`
+- `streamstats`
+- `timechart`
+
+### 6.5 External enrichment and composition
+
+- `lookup`
+- `join`
+- `append`
+- `appendcols`
+- `appendpipe`
+- `union`
+
+That family-level framing is more useful than memorizing commands one at a time.
+
+## 7. Aggregation In SPL2 Is Richer Than Basic `stats`
+
+Most SPL2 content stops at `count()` and `sum()`. That is not enough for developers.
+
+### 7.1 Aggregate functions
+
+You should be comfortable with:
+
+- `avg`, `sum`, `min`, `max`, `range`
+- `count`, `distinct_count`, `estdc`
+- `median`, `mode`, `perc`, `upperperc`
+- `stdev`, `stdevp`, `var`, `varp`
+
+```spl
+search index=main
+| stats count() AS events, distinct_count(host) AS hosts, avg(bytes) AS avg_bytes by sourcetype
+```
+
+### 7.2 Eval inside statistical functions
+
+This is a high-value SPL2 idiom:
+
+```spl
+... | stats count(eval(status="404")) AS not_found by sourcetype
+```
+
+Instead of precomputing a field, you can embed the expression directly.
+
+### 7.3 Time functions for aggregation
+
+Use chart/time functions deliberately:
+
+```spl
+... | timechart span=5m sum(bytes) BY host
+... | stats earliest(_time) AS first_seen, latest(_time) AS last_seen by user
+```
+
+### 7.4 Event-order functions
+
+`first()` and `last()` are not the same as min/max. They depend on event order.
+
+```spl
+... | streamstats first(status) AS first_status, last(status) AS last_status by session_id
+```
+
+Canonical docs:
 - https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-reference/statistical-and-charting-functions/overview-of-spl2-stats-and-chart-functions
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-reference/spl2-compatibility-profiles-and-quick-references/compatibility-quick-reference-for-spl2-evaluation-functions
+- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-reference/stats-command/stats-command-overview-syntax-and-usage
 
-## 11. Compatibility Profiles Matter
+## 8. Modules, Branching, Views, Namespaces
 
-This is a major operational point.
+This is the part of SPL2 that makes it suitable for real engineering work.
 
-SPL2 is described as product-agnostic, but products only implement subsets through compatibility profiles. Splunk documents at least these profiles:
+### 8.1 Modules are the unit of reuse
 
-- `splunkd`
-- `edgeProcessor`
-- `ingestProcessor`
+A module can contain:
 
-Do not assume that because a command exists in the SPL2 reference it is available in every SPL2-capable product surface.
+- imports
+- named searches
+- custom functions
+- custom data types
+- exports
 
-Examples from the docs:
+Treat a module like a source file, not a notebook cell.
 
-- `spl1` is documented for search contexts, not pipelines
-- some commands exist only in `splunkd`
-- commands such as `branch`, `eval`, `fields`, `from`, `into`, and `timewrap` vary by profile support
-
-For developer work, that means:
-
-1. identify the target runtime first
-2. check the compatibility quick references second
-3. only then finalize query design
-
-Relevant sources:
-
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-reference/spl2-compatibility-profiles-and-quick-references
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-reference/spl2-compatibility-profiles-and-quick-references/compatibility-quick-reference-for-spl2-commands
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-reference/spl2-compatibility-profiles-and-quick-references/compatibility-quick-reference-for-spl2-evaluation-functions
-
-## 12. Migration from SPL to SPL2
-
-Splunk provides conversion tools in the Search bar and module editor. Use them, but do not treat them as the end of migration.
-
-### 12.1 What the converter is good for
-
-- Rapid first-pass syntax translation
-- Learning equivalent SPL2 forms
-- Bootstrapping existing searches into module-friendly form
-
-### 12.2 What still requires human review
-
-- Search bar versus module context
-- Implicit versus explicit `search`
-- Comma-separated lists
-- Quoting rules
-- Boolean handling in `eval`
-- Direct stats expressions
-- Product-profile compatibility
-
-### 12.3 Practical migration checklist
-
-1. Determine target runtime:
-   Search bar, module editor, app, Edge Processor, or Ingest Processor.
-2. Convert the original SPL using Splunk's tooling when available.
-3. Normalize syntax:
-   commas, option order, quoting, concatenation, explicit `search` where needed.
-4. Re-evaluate command support:
-   if a command is unsupported directly, see whether `spl1` is acceptable.
-5. Refactor into named searches if the query will be reused.
-6. Extract shared logic into views or module-local helpers if the search is growing.
-
-### 12.4 `spl1` as a bridge, not a destination
-
-Splunk documents `spl1` as the way to embed SPL commands that SPL2 does not directly support. That is useful during migration, but it should usually be treated as transitional unless:
-
-- the command is genuinely unavailable in SPL2
-- the target profile supports `spl1`
-- portability is not a priority
-
-Relevant sources:
-
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-overview/using-spl-commands-in-spl2-searches
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-manual/converting-spl-to-spl2/convert-a-search-from-spl-to-spl2
-- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-reference/spl1-command
-
-## 13. Practical Development Patterns
-
-### 13.1 Pattern: Start ad hoc, then promote to module
-
-Start in the Search bar when exploring:
+### 8.2 Branching replaces copy-paste pipelines
 
 ```spl
-search index=main status=500
-| stats count() by host
+$base = from main where sourcetype="access_*"
+
+$errors = from $base where status >= 400
+$success = from $base where status < 400
+
+$error_summary = from $errors group by host select host, count() AS errors
+$success_summary = from $success group by host select host, count() AS successes
 ```
 
-Promote to a module when it becomes reusable:
+This is structurally better than repeating the same initial filter in four separate searches.
+
+### 8.3 Views expose stable search interfaces
+
+Views are exported named searches. They are a good boundary when:
+
+- raw indexes are too noisy
+- business logic should be centralized
+- teams need curated datasets
+
+### 8.4 Namespaces matter for packaging
+
+Namespaces solve two problems:
+
+- naming collisions
+- reusable imports across apps and teams
+
+If you expect a search, function, or view to be shared, design the namespace story early rather than retrofitting it after duplication spreads.
+
+Canonical docs:
+- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-manual/modules-statements-and-views/spl2-modules-and-statements
+- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-manual/export-import-and-namespaces/understanding-spl2-namespaces
+
+## 9. Custom Functions And Custom Data Types
+
+Most teams never reach this layer, but it is where SPL2 becomes a language platform rather than a query syntax.
+
+### 9.1 Custom functions
+
+Reach for a custom function when:
+
+- the same expression logic repeats across modules
+- the logic is domain-specific
+- inline `eval` expressions are becoming unreadable
+
+Do not use custom functions as a reflex. They should reduce duplication or sharpen domain meaning.
+
+### 9.2 Built-in vs custom
+
+The safe order is:
+
+1. built-in function
+2. clear inline expression
+3. custom function
+
+If built-ins already express the logic clearly, wrapping them can hurt readability.
+
+### 9.3 Custom data types
+
+Custom data types matter when:
+
+- your data has a schema worth naming
+- you want stronger, documented field expectations
+- modules share structured objects
+
+This is one of the least-used but most architecture-relevant SPL2 features.
+
+Canonical docs:
+- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-manual/functions/built-in-and-custom-functions
+- https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-manual/data-types/custom-data-types
+
+## 10. Compatibility And Portability Strategy
+
+Portability is not free. If the query may run outside `splunkd`, review it with this checklist:
+
+- Does every command exist in the target profile?
+- Does every function exist in the target profile?
+- Are modules/views supported in the same way?
+- Is the query relying on `spl1` as a bridge?
+- Is there a simpler, more portable expression alternative?
+
+### 10.1 `spl1` is a bridge, not a destination
+
+If a migration temporarily needs unsupported SPL:
 
 ```spl
-$error_events = search index=main status=500
-$error_counts = from $error_events
-| stats count() AS error_count by host
+$legacy = from main where host="www3" | `top limit=20 referer`
 ```
 
-### 13.2 Pattern: Use a base search for investigation trees
+That can be acceptable during migration. It should not become the default authoring style.
 
-```spl
-$base = search index=main sourcetype="access_*"
-$http_4xx = from $base | where status >= 400 AND status < 500
-$http_5xx = from $base | where status >= 500 AND status < 600
-$by_host = from $http_5xx | stats count() AS errors by host
-```
+### 10.2 Prefer portable idioms
 
-This is cleaner than repeatedly cloning pipelines.
+Prefer:
 
-### 13.3 Pattern: Prefer views for shared curation layers
+- explicit quoting
+- `where` predicates over ambiguous search syntax
+- built-in functions over opaque search literals
+- simpler aggregates over clever but brittle one-liners
 
-Use views when multiple teams need a stable, reviewed data abstraction over the same raw source.
+## 11. Migration Patterns That Actually Matter
 
-### 13.4 Pattern: Keep dynamic field generation rare
+The highest-value migration changes are structural, not cosmetic.
 
-Field templates are powerful, but they increase downstream ambiguity. Prefer stable schemas unless dynamic fields are the point.
+### 11.1 Replace SPL habits that no longer fit
 
-### 13.5 Pattern: Treat compatibility as part of design
+- space-separated lists -> comma-separated lists
+- bare single-quoted strings -> double-quoted strings
+- ad hoc field quoting -> deliberate single-quoted field names
+- implicit search-bar behavior -> explicit module statements
 
-A query is not "done" when it parses. It is done when it is valid in the intended SPL2 profile.
+### 11.2 Re-evaluate old pipeline structure
 
-## 14. Anti-Patterns
+A good SPL2 rewrite often:
 
-- Writing module code as though it were Search bar code
-- Assuming all string-like values can stay unquoted
-- Assuming all fields can stay unquoted
-- Using `spl1` as a permanent replacement for learning SPL2
-- Ignoring compatibility profiles
-- Overusing wildcards, especially broad raw-event scans
-- Building unreadable queries when modules and named searches would simplify them
-- Generating dynamic field names where stable schema would be better
+- moves filtering into `WHERE`
+- moves shaping into `SELECT`
+- introduces a base named search
+- uses branching instead of duplicate pipelines
 
-## 15. A Short SPL2 Starter Kit
+### 11.3 Do not port ambiguity
 
-If you are onboarding a developer to SPL2, these are the pages to read first in order:
+If the original SPL relies on parser tolerance, undocumented shortcuts, or positional weirdness, treat that as technical debt to remove during migration.
 
-1. What is SPL2?
-   https://help.splunk.com/en/splunk-cloud-platform/search/spl2-overview/what-is-spl2
-2. What is new and different in SPL2?
-   https://help.splunk.com/en/splunk-cloud-platform/search/spl2-overview/what-is-new-and-different-in-spl2-
-3. Specific differences between SPL and SPL2
-   https://help.splunk.com/en/splunk-cloud-platform/search/spl2-overview/specific-differences-between-spl-and-spl2
-4. Understanding SPL2 syntax
-   https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-reference/introduction/understanding-spl2-syntax
-5. Start searching data using SPL2
-   https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-manual/getting-started/quick-start-write-and-run-a-basic-spl2-search/start-searching-data-using-spl2
-6. `from` command overview
-   https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-reference/from-command/from-command-overview
-7. `eval` command overview and usage
-   https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-reference/eval-command/eval-command-overview-and-syntax
-   https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-reference/eval-command/eval-command-usage
-8. `stats` command overview
-   https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-reference/stats-command/stats-command-overview-syntax-and-usage
-9. Modules and branching
-   https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-manual/modules-statements-and-views/spl2-modules-and-statements
-   https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-manual/modules-statements-and-views/branching-spl2-searches
-10. Compatibility profiles
-   https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-reference/spl2-compatibility-profiles-and-quick-references
+## 12. Code Review Checklist For SPL2
 
-## 16. Final Takeaways
+Use this checklist in reviews:
 
-SPL2 is best understood as a language family with a resource model, not merely as "new SPL syntax".
+- Is the runtime context correct: search bar, module editor, or another profile?
+- Is `search` vs `from` a deliberate choice?
+- Are strings double-quoted and special field names single-quoted?
+- Are lists comma-separated?
+- Are command options before command arguments?
+- Are expression contexts separated correctly from search syntax contexts?
+- Are search literals used only where they clarify intent or bridge missing support?
+- Is branching used where repeated pipelines share the same base dataset?
+- Are functions/profile compatibility constraints respected?
+- Is the query readable enough that another engineer could safely extend it?
 
-For developers, the main changes that matter are:
+## 13. Recommended Reading Order Inside This Skill
 
-- think in datasets and modules
-- choose `search` versus `from` deliberately
-- learn the quoting and expression rules early
-- treat compatibility profiles as hard constraints
-- use branching and views to avoid copy-paste query design
-- use `spl1` tactically, not as the default path
+Use this guide for mental models and design choices.
 
-If you adopt those habits, SPL2 becomes much easier to reason about, review, and reuse than a large body of one-off SPL.
+Then use:
+
+- `spl2-context7-cookbook.md` for scenario-first snippets
+- `spl2-grammar-and-functions-reference.md` for lookup-style grammar and function examples
+
+The cookbook tells you how to solve common tasks. The grammar/functions reference tells you what the language surface actually is.

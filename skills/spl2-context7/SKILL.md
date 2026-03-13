@@ -54,7 +54,9 @@ Read only the reference file that matches the user's need.
 - `references/spl2-context7-cookbook.md`
   Use for scenario-first answers, snippets, and command examples.
 - `references/spl2-developer-tutorial.md`
-  Use for deeper explanations, architecture, migration rationale, modules/views/namespaces, and broader developer guidance.
+  Use for deeper explanations, architecture, migration rationale, modules/views/namespaces, expression semantics, and broader developer guidance.
+- `references/spl2-grammar-and-functions-reference.md`
+  Use for language lookup: grammar primitives, query forms, expression forms, and built-in function examples by family.
 
 ## Selection Guide
 
@@ -72,6 +74,13 @@ Use the tutorial first when the user asks:
 - "How should we structure SPL2 in a project?"
 - "When should I use modules or views?"
 - "How do compatibility profiles affect design?"
+
+Use the grammar/functions reference first when the user asks:
+
+- "Show me the syntax for ..."
+- "What functions exist for ..."
+- "Give me an example of every ... function"
+- "How do arrays/objects/lambdas/templates work in SPL2?"
 
 Use both when the user wants explanation plus code.
 

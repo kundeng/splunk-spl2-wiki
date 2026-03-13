@@ -1,7 +1,7 @@
 # SPL2 Scenario Cookbook
 
-This document is the main scenario-and-snippet reference for the `spl2-context7` library. It is designed for retrieval-oriented use and favors short scenarios, compact explanations, and concrete SPL2 snippets over long narrative.
-The examples are grounded in Splunk primary documentation. The local corpus tooling in this repository is used to maintain and refresh that source material, but this cookbook itself is the intended reference surface.
+This document is the main scenario-and-snippet reference for the `spl2-context7` library. It favors short scenarios, compact explanations, and concrete SPL2 snippets over long narrative.
+Use it as the practical companion to the deeper tutorial and the grammar/functions reference.
 
 ## How To Use This File
 
