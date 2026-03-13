@@ -1,11 +1,8 @@
 # SPL2 for Developers
 
-This tutorial is a developer-oriented guide to Splunk SPL2 based on a locally downloaded corpus of Splunk primary documentation. The corpus in this repo contains 282 SPL2 documents captured on March 13, 2026:
+This tutorial is a developer-oriented guide to Splunk SPL2 for the `spl2-context7` library. Its goal is not to restate the product docs page-by-page. It is to turn Splunk's primary documentation into a coherent mental model for engineers who need to write, migrate, review, and reuse SPL2 in real projects.
 
-- `research/index/manifest.json`
-- `research/index/summary.md`
-
-The goal here is not to restate the product docs page-by-page. It is to turn them into a coherent mental model for engineers who need to write, migrate, review, and reuse SPL2 in real projects.
+The repository includes local corpus tooling for maintaining the source material behind this tutorial, but the tutorial itself is meant to be a durable end-user reference rather than a fetcher manual.
 
 ## Scope
 
