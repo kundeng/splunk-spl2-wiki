@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
+
+# Generated local research corpus
+research/
+
+# Local temp files
+*.log
+*.tmp
