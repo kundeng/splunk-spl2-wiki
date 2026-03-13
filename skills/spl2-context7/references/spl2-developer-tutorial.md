@@ -1,3 +1,6 @@
+<!-- Generated file. Do not edit directly. -->
+<!-- Source of truth lives under /docs. Run `python3 scripts/sync_skill_references.py` after changes. -->
+
 # SPL2 for Developers
 
 This tutorial is a developer-oriented guide to Splunk SPL2 based on a locally downloaded corpus of Splunk primary documentation. The corpus in this repo contains 282 SPL2 documents captured on March 13, 2026:

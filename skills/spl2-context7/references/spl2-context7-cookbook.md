@@ -1,3 +1,6 @@
+<!-- Generated file. Do not edit directly. -->
+<!-- Source of truth lives under /docs. Run `python3 scripts/sync_skill_references.py` after changes. -->
+
 # SPL2 Scenario Cookbook
 
 This document is designed for repository ingestion and retrieval-oriented use. It favors short scenarios, compact explanations, and concrete SPL2 snippets over long narrative.

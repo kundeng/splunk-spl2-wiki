@@ -32,3 +32,9 @@ The repository also includes a skill package for Context7-style use:
 - `skills/spl2-context7/SKILL.md`
 - `skills/spl2-context7/references/spl2-context7-cookbook.md`
 - `skills/spl2-context7/references/spl2-developer-tutorial.md`
+
+The files under `docs/` are the authoring source of truth. Sync them into the skill package with:
+
+```bash
+python3 scripts/sync_skill_references.py
+```

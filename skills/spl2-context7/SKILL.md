@@ -56,6 +56,12 @@ Read only the reference file that matches the user's need.
 - `references/spl2-developer-tutorial.md`
   Use for deeper explanations, architecture, migration rationale, modules/views/namespaces, and broader developer guidance.
 
+These files are generated from the repository's `docs/` directory. If they look stale, sync them with:
+
+```bash
+python3 scripts/sync_skill_references.py
+```
+
 ## Selection Guide
 
 Use the cookbook first when the user asks:
