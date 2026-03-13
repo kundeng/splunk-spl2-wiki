@@ -8,6 +8,8 @@ This repo contains SPL2 writing artifacts and a fetcher that can build a local d
   `docs/spl2-developer-tutorial.md`
 - Scenario cookbook:
   `docs/spl2-context7-cookbook.md`
+- Context7 skill:
+  `skills/spl2-context7/`
 - Fetcher:
   `scripts/fetch_spl2_docs.py`
 
@@ -22,3 +24,11 @@ python3 -m venv .venv
 The fetcher downloads SPL2 overview, search manual, and search reference pages from `help.splunk.com`, extracts article content and metadata, and writes a local corpus under `research/`.
 
 `research/` is intentionally gitignored so the repository stays small and only tracks the durable source files.
+
+## Skill Layout
+
+The repository also includes a skill package for Context7-style use:
+
+- `skills/spl2-context7/SKILL.md`
+- `skills/spl2-context7/references/spl2-context7-cookbook.md`
+- `skills/spl2-context7/references/spl2-developer-tutorial.md`
