@@ -1,19 +1,15 @@
 # SPL2 Context7 Library
 
-This repository is primarily a Splunk SPL2 reference library for Context7-style retrieval and skill use. Its main deliverables are the SPL2 scenario cookbook, the developer tutorial, and the packaged `spl2-context7` skill.
-
-The fetcher and local corpus tooling exist to maintain those references against Splunk's primary documentation. They are supporting infrastructure, not the main product of the repository.
+This repository is a Splunk SPL2 reference library for Context7-style retrieval and skill use. Its main deliverables are the packaged `spl2-context7` skill, the SPL2 scenario cookbook, and the developer tutorial.
 
 ## Outputs
 
 - Context7 skill:
   `skills/spl2-context7/`
 - Tutorial:
-  `docs/spl2-developer-tutorial.md`
+  `skills/spl2-context7/references/spl2-developer-tutorial.md`
 - Scenario cookbook:
-  `docs/spl2-context7-cookbook.md`
-- Corpus usage guide:
-  `docs/corpus-usage.md`
+  `skills/spl2-context7/references/spl2-context7-cookbook.md`
 - Fetcher:
   `scripts/fetch_spl2_docs.py`
 
@@ -30,8 +26,8 @@ Use this repository when you want:
 Start here:
 
 - `skills/spl2-context7/SKILL.md`
-- `docs/spl2-context7-cookbook.md`
-- `docs/spl2-developer-tutorial.md`
+- `skills/spl2-context7/references/spl2-context7-cookbook.md`
+- `skills/spl2-context7/references/spl2-developer-tutorial.md`
 
 ## Source Maintenance
 
@@ -47,19 +43,6 @@ The fetcher downloads SPL2 overview, search manual, and search reference pages f
 
 `research/` is intentionally gitignored so the repository stays small and only tracks the durable source files.
 
-## Local Corpus Usage
-
-After generating `research/`, see:
-
-- `docs/corpus-usage.md`
-
-That guide covers:
-
-- searching the extracted corpus with shell tools
-- loading and querying the extracted JSON from Python
-- understanding the extracted document structure
-- offline and team-local usage patterns
-
 ## Skill Layout
 
 The repository also includes a skill package for Context7-style use:
@@ -67,9 +50,3 @@ The repository also includes a skill package for Context7-style use:
 - `skills/spl2-context7/SKILL.md`
 - `skills/spl2-context7/references/spl2-context7-cookbook.md`
 - `skills/spl2-context7/references/spl2-developer-tutorial.md`
-
-The files under `docs/` are the authoring source of truth. Sync them into the skill package with:
-
-```bash
-python3 scripts/sync_skill_references.py
-```

@@ -1,6 +1,3 @@
-<!-- Generated file. Do not edit directly. -->
-<!-- Source of truth lives under /docs. Run `python3 scripts/sync_skill_references.py` after changes. -->
-
 # SPL2 for Developers
 
 This tutorial is a developer-oriented guide to Splunk SPL2 for the `spl2-context7` library. Its goal is not to restate the product docs page-by-page. It is to turn Splunk's primary documentation into a coherent mental model for engineers who need to write, migrate, review, and reuse SPL2 in real projects.

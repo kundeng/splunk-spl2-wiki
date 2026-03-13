@@ -1,10 +1,6 @@
-<!-- Generated file. Do not edit directly. -->
-<!-- Source of truth lives under /docs. Run `python3 scripts/sync_skill_references.py` after changes. -->
-
 # SPL2 Scenario Cookbook
 
 This document is the main scenario-and-snippet reference for the `spl2-context7` library. It is designed for retrieval-oriented use and favors short scenarios, compact explanations, and concrete SPL2 snippets over long narrative.
-
 The examples are grounded in Splunk primary documentation. The local corpus tooling in this repository is used to maintain and refresh that source material, but this cookbook itself is the intended reference surface.
 
 ## How To Use This File
