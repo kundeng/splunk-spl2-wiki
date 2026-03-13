@@ -512,6 +512,252 @@ See:
 - https://help.splunk.com/en/splunk-cloud-platform/search/spl2-overview/using-spl-commands-in-spl2-searches
 - https://help.splunk.com/en/splunk-cloud-platform/search/spl2-search-reference/spl1-command
 
+## Scenario: Convert SPL To SPL2 In The Search Bar
+
+Example SPL input:
+
+```spl
+index=main | fields host* categoryId | eval low-categoryId=lower(categoryId)
+```
+
+Converted SPL2 result:
+
+```spl
+index=main | fields 'host*', categoryId | eval 'low-categoryId'=lower(categoryId)
+```
+
+Typical conversion changes:
+
+- fields in lists become comma-separated
+- special field names gain single quotes
+- the result stays usable in the Search bar as a standalone SPL2 search
+
+## Scenario: Convert SPL To SPL2 In The Module Editor
+
+In the module editor, wrap the SPL fragment in backticks so Quick Fix can target it.
+
+Example:
+
+```spl
+$search = search index=main | `fields host* categoryId | eval low-categoryId=lower(categoryId)`
+```
+
+Expected converted result:
+
+```spl
+$search = search index=main | fields 'host*', categoryId | eval 'low-categoryId'=lower(categoryId)
+```
+
+Use this path when the end state should be a named reusable search instead of an ad hoc Search bar query.
+
+## Scenario: Start A Module With Imports
+
+When creating a module from the UI for an index like `main`, the editor can generate:
+
+```spl
+import main from ~indexes
+$search = search index=main
+```
+
+This is the canonical starting point for module-based work.
+
+## Scenario: Add Multiple Searches To A Module
+
+```spl
+import main from ~indexes
+$my_search1 = search index=main
+$my_search2 = from $my_search1 | where status=200
+$my_search3 = from $my_search2 | stats count() by host
+```
+
+Use unique names for each search in the same module.
+
+## Scenario: Use Dataset Literals For Temporary Data
+
+Dataset literals let you create temporary in-memory datasets inline.
+
+```spl
+FROM [
+  { state: "Washington", abbreviation: "WA", population: 7535591 },
+  { state: "California", abbreviation: "CA", population: 39557045 },
+  { state: "Oregon", abbreviation: "OR", population: 4190714 }
+]
+WHERE population > 5000000
+SELECT state, abbreviation
+```
+
+Use this for testing, examples, and isolated query experiments.
+
+## Scenario: Generate Temporary Events With `repeat()`
+
+Dataset functions can create rows without relying on an index.
+
+Conceptual pattern:
+
+```spl
+FROM repeat(...)
+SELECT *
+```
+
+`repeat()` is the SPL2 dataset-function analogue to SPL `makeresults`.
+
+## Scenario: Use Search Literals Instead Of `search`
+
+Search literals can replace simple `searchmatch` style filtering inside `FROM`.
+
+```spl
+FROM main WHERE `500`
+SELECT _time, host, source
+```
+
+Equivalent search-style pattern:
+
+```spl
+search index=main 500
+```
+
+They also work for embedded unsupported SPL:
+
+```spl
+$search = from main where host="www3" | `top limit=20 referer`
+```
+
+## Scenario: Access Array And Object Values
+
+Use square brackets for arrays:
+
+```spl
+... | eval competitive=games[2]
+```
+
+Use dot or brackets for object keys:
+
+```spl
+... | eval bridge_name=bridges.name
+```
+
+or
+
+```spl
+... | eval bridge_name=bridges["name"]
+```
+
+## Scenario: Use Lambda Expressions In JSON Functions
+
+Lambda expressions are used where functions like `filter`, `map`, and `reduce` expect function parameters.
+
+Simple lambda:
+
+```spl
+$a -> $a + 10
+```
+
+Multiple parameters:
+
+```spl
+($a, $b) -> $a + $b
+```
+
+Block form:
+
+```spl
+($a, $b) -> { $z = $a + $b; return $z }
+```
+
+Use lambdas when working with array and JSON-transform functions rather than scalar field transforms.
+
+## Scenario: Define A Custom Eval Function
+
+Custom eval functions let you encapsulate reusable logic in a module.
+
+Skeleton:
+
+```spl
+function normalize_status($status) {
+  return lower($status)
+}
+```
+
+Typed form:
+
+```spl
+function normalize_status($status: string): string {
+  return lower($status)
+}
+```
+
+Use custom eval functions when logic is reused across multiple searches in the same module or app.
+
+## Scenario: Define A Custom Command Function
+
+Custom command functions behave like commands.
+
+Generating-style skeleton:
+
+```spl
+function make_source(): dataset {
+  return search index=main
+}
+```
+
+Non-generating-style skeleton:
+
+```spl
+function enrich($source) {
+  return from $source | eval enriched="true"
+}
+```
+
+Use this when you need a reusable pipeline step rather than a scalar return value.
+
+## Scenario: Define A Custom Data Type
+
+Custom data types refine built-in types with tighter constraints.
+
+Example:
+
+```spl
+type score = int & >= 0 & <= 100
+```
+
+Use custom types when the built-in types are too broad for your data constraints.
+
+## Scenario: Use Built-In Data Type Literals
+
+Examples of SPL2 literal-friendly types:
+
+```spl
+"surname"
+true
+365
+3.14F
+1500000000000L
+{name:"Settlers of Catan", type:"competitive"}
+["buttercup", "fluttershy", 3.15]
+```
+
+This matters when building schemas, dataset literals, or precise examples in modules.
+
+## Scenario: Use Relative Time And Time Span Values
+
+Relative time example:
+
+```spl
+FROM main WHERE earliest=-10h@h SELECT _time, host
+```
+
+Time span examples:
+
+```spl
+... | bin span=10m _time
+```
+
+```spl
+... | stats count() by span(_time, 1h), host
+```
+
+These are especially useful for repeatable query windows and tutorial examples.
+
 ## Scenario: Choose Between Search Bar And Module Editor
 
 Use Search bar for:
